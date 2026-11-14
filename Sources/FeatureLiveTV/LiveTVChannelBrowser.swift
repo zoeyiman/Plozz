@@ -107,12 +107,8 @@ struct LiveTVChannelBrowser: View {
             HStack(spacing: 16) {
                 Text(channel.number.formatted(.number.grouping(.never))).font(.caption.monospacedDigit())
                     .foregroundStyle(palette.secondaryText).frame(width: 56)
-                AsyncImage(url: channel.logoURL) { image in
-                    image.resizable().scaledToFit()
-                } placeholder: {
-                    Image(systemName: channel.symbol).resizable().scaledToFit()
-                }
-                .frame(width: 76, height: 56)
+                PrototypeStationMark(channel: channel, size: 44)
+                    .frame(width: 77, height: 44)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(verbatim: channel.name).font(.headline).lineLimit(1)
                     if let current {
