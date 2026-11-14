@@ -189,7 +189,8 @@ struct PrototypePreviewLayout {
             largeText ? 440 : (compact ? 184 : 236)
         )
         #if os(tvOS)
-        let videoLeading = usesSplitChannels ? contentFrame.minX + channelListWidth + PrototypeLayout.sectionGap : bounds.minX
+        let listWidth = min(contentFrame.width * 0.44, 780)
+        let videoLeading = usesSplitChannels ? contentFrame.minX + listWidth + PrototypeLayout.sectionGap : bounds.minX
         let videoWidth = usesSplitChannels ? max(1, contentFrame.maxX - videoLeading) : bounds.width
         heroHeight = isSearching
             ? min(browsingHeroHeight, largeText ? 230 : (compact ? 140 : 180))
