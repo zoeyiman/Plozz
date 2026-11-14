@@ -33,6 +33,7 @@ public struct ServerHomeSection: Codable, Hashable, Identifiable, Sendable {
         case liveTV
         case recordings
         case recommendations
+        case collections
 
         public var title: LocalizedStringResource {
             switch self {
@@ -43,6 +44,7 @@ public struct ServerHomeSection: Codable, Hashable, Identifiable, Sendable {
             case .liveTV: "Live TV"
             case .recordings: "Recordings"
             case .recommendations: "Recommended"
+            case .collections: "Collections"
             }
         }
     }

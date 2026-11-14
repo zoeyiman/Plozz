@@ -613,3 +613,21 @@ Carousel rows share a native focus
 section so Down can cross a loading row to reach usable content. Placeholder and
 resolved heroes use the same row-recede geometry. The `PLZBOOT` row-ready events distinguish first usable
 data from completion of the entire Home load.
+
+## tvOS Jellyfin collection-cover shelf
+
+On tvOS, Jellyfin Home discovery offers one collection-cover shelf alongside the
+server's other rows. A real boxset library supplies its server name (for example,
+Streaming Services); otherwise the server-wide directory is called Collections.
+The row contains BoxSet covers, not the members of each collection. Selecting a
+cover uses the existing collection detail/browse route, and See all retains the
+provider's collection paging. Existing collection artwork/cover-layout settings
+apply, including landscape logos when that is the supplied artwork.
+
+Customize Home can enable, hide and reorder this server section like other Home
+rows. A custom preset retains its explicit choices: discovering this additional
+row does not force it into a saved custom arrangement. Navigation shortcut
+visibility remains independent, so the collection library need not occupy a tab.
+Library availability and profile/server-user authorization continue to gate the
+row. This addition currently targets Jellyfin on tvOS; Emby, Plex and mobile
+server-layout defaults retain their existing behavior.

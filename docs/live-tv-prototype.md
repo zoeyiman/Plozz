@@ -2376,3 +2376,27 @@ The [native Live TV regression fixture](../Tests/FeatureLiveTVRemoteTests/README
 provides that scene-backed host, actual remote Search traversal and isolated
 source-onboarding navigation. Its independent project and inputs are committed;
 it does not require a configured server or download a channel feed.
+
+## tvOS channel browser
+
+The tvOS Channels presentation places a vertical channel list on the leading
+side and an inline 16:9 preview with programme information on the trailing side.
+Guide switches back to the existing EPG. Search, Multiview and accessibility text
+sizes retain the established full-width presentations. iPhone/iPad layout is
+unchanged.
+
+The channel list publishes actual native focus through `PrototypeButtonStyle`;
+`LiveTVPlaybackCoordinator` and `LiveTVPreviewController` still own tuning. With
+Auto Preview enabled, focus settling uses the existing cancellable 600 ms delay.
+Rapid movements invalidate older requests. Returning from full screen in Channels
+mode lets subsequent channel focus retune the inline preview, while explicit
+Preview Off is still respected. Existing first-use preview consent is retained.
+Selecting a channel or Full screen uses the normal watch/promotion path rather
+than constructing another player.
+
+Guide data uses the existing bounded server/cached/library window requests and
+import owners. Nearby programmes load after a short cancellable delay, rather
+than scanning the complete guide for every focus move. The player remains in its
+existing root pane while the browser layout changes; runtime continuity and
+presented focus/geometry still require the hosted/physical-device checks described
+in the testing policy.

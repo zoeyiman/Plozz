@@ -11,6 +11,27 @@ import XCTest
 final class LiveTVGuideRowLayoutTests: XCTestCase {
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
 
+    #if os(tvOS)
+    func testChannelBrowserPreviewSitsBesideTheChannelListAtSixteenByNine() {
+        for width: CGFloat in [1280, 1740, 1920] {
+            let layout = PrototypePreviewLayout(size: CGSize(width: width, height: 1080), splitChannels: true)
+            XCTAssertTrue(layout.usesSplitChannels)
+            XCTAssertGreaterThanOrEqual(layout.videoFrame.minX,
+                layout.contentFrame.minX + layout.channelListWidth + PrototypeLayout.sectionGap)
+            XCTAssertEqual(layout.videoFrame.maxX, layout.contentFrame.maxX, accuracy: 0.5)
+            XCTAssertEqual(layout.videoFrame.width / layout.videoFrame.height, 16 / 9, accuracy: 0.001)
+            XCTAssertEqual(layout.videoFrame.minY, layout.contentFrame.minY + PrototypePreviewLayout.channelToolbarHeight)
+            XCTAssertEqual(layout.sidebarWidth, 0)
+            XCTAssertGreaterThan(layout.contentFrame.maxY - layout.videoFrame.maxY, 160)
+        }
+    }
+
+    func testSearchAndAccessibilityKeepTheExistingFullWidthGuide() {
+        XCTAssertFalse(PrototypePreviewLayout(size: CGSize(width: 1920, height: 1080), isSearching: true, splitChannels: true).usesSplitChannels)
+        XCTAssertFalse(PrototypePreviewLayout(size: CGSize(width: 1920, height: 1080), largeText: true, splitChannels: true).usesSplitChannels)
+    }
+    #endif
+
     func testRestoredTimelineOffsetRetainsEnoughGuideHours() {
         for width: CGFloat in [320, 1_000] {
             XCTAssertEqual(PrototypeLayout.hoursCoveringTimelineOffset(0, for: width), 6)

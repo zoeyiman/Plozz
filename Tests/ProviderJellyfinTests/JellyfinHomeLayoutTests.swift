@@ -296,6 +296,35 @@ final class JellyfinHomeLayoutTests: XCTestCase {
         }
     }
 
+    #if os(tvOS)
+    func testCollectionCoversAreAnAdditionalHomeShelfUsingTheServerLibraryName() async throws {
+        let stub = StubHTTPClient()
+        stub.stub(pathSuffix: "/DisplayPreferences/usersettings", json: preferences(["resume", "latestmedia"]))
+        stub.stub(pathSuffix: "/Users/selected-user/Views", json: #"{"Items":[{"Id":"movies","Name":"Movies","CollectionType":"movies"},{"Id":"services","Name":"Streaming Services","CollectionType":"boxsets"}]}"#)
+        let provider = JellyfinProvider(session: session(), http: stub)
+        let response = try await provider.serverHomeLayout()
+        let layout = try XCTUnwrap(response)
+        let collection = try XCTUnwrap(layout.sections.first { $0.kind == .collections })
+        XCTAssertEqual(collection.title, "Streaming Services")
+        XCTAssertEqual(collection.libraryID, "services")
+        XCTAssertEqual(layout.sections.filter { $0.kind == .collections }.count, 1)
+        XCTAssertTrue(layout.sections.contains { $0.kind == .continueWatching })
+        XCTAssertTrue(layout.sections.contains { $0.kind == .recentlyAdded })
+        XCTAssertEqual(stub.sentPaths.count, 2, "Discovering the row must not enumerate collection members")
+    }
+
+    func testHomeCollectionsReturnsCoversAndDoesNotExpandMembers() async throws {
+        let stub = StubHTTPClient()
+        stub.stub(pathSuffix: "/Users/selected-user/Items", json: #"{"Items":[{"Id":"netflix","Name":"Netflix","Type":"BoxSet"},{"Id":"disney","Name":"Disney+","Type":"BoxSet"}],"TotalRecordCount":2}"#)
+        let provider = JellyfinProvider(session: session(), http: stub)
+        let items = try await provider.serverHomeItems(section: .init(id: "plozz:collections", kind: .collections,
+            libraryID: "jellyfin:collections"), limit: 20, excludingLibraryIDs: [])
+        XCTAssertEqual(items.map(\.id), ["netflix", "disney"])
+        XCTAssertTrue(items.allSatisfy { $0.kind == .collection })
+        XCTAssertFalse(stub.sentPaths.contains { $0.contains("/Items/netflix") || $0.contains("/Items/disney") })
+    }
+    #endif
+
     private func session(_ kind: ProviderKind = .jellyfin) -> UserSession {
         UserSession(
             server: MediaServer(
@@ -336,7 +365,7 @@ final class JellyfinHomeLayoutTests: XCTestCase {
         let layout = try XCTUnwrap(response)
 
         XCTAssertEqual(layout.source, .webPreferences)
-        XCTAssertEqual(layout.sections.map(\.kind), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.kind), [
             .recentlyAdded, .recentlyAdded, .continueWatching, .libraries,
             .liveTV, .nextUp, .recordings
         ])
@@ -367,7 +396,7 @@ final class JellyfinHomeLayoutTests: XCTestCase {
         stub.stub(pathSuffix: "/Users/selected-user/Views", json: views)
         let response = try await JellyfinProvider(session: session(), http: stub).serverHomeLayout()
         let layout = try XCTUnwrap(response)
-        XCTAssertEqual(layout.sections.map(\.kind), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.kind), [
             .libraries, .continueWatching, .nextUp, .recentlyAdded, .recentlyAdded
         ])
         XCTAssertTrue(layout.omitsMusic)
@@ -388,7 +417,7 @@ final class JellyfinHomeLayoutTests: XCTestCase {
             let response = try await JellyfinProvider(session: session(kind), http: stub).serverHomeLayout()
             let layout = try XCTUnwrap(response)
             XCTAssertEqual(layout.source, .webPreferences)
-            XCTAssertEqual(layout.sections.map(\.id), [
+            XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.id), [
                 "web:0:latestmedia:shows", "web:0:latestmedia:movies",
                 "web:1:resume", "web:2:nextup", "web:3:folders"
             ])
@@ -407,7 +436,7 @@ final class JellyfinHomeLayoutTests: XCTestCase {
 
         let response = try await JellyfinProvider(session: session(), http: stub).serverHomeLayout()
         let layout = try XCTUnwrap(response)
-        XCTAssertEqual(layout.sections.map(\.id), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.id), [
             "web:0:smalllibrarytiles", "web:1:resume", "web:5:nextup",
             "web:6:latestmedia:shows", "web:6:latestmedia:movies"
         ])
@@ -570,10 +599,10 @@ final class JellyfinHomeLayoutTests: XCTestCase {
         let response = try await JellyfinProvider(session: session(.emby), http: stub).serverHomeLayout()
         let layout = try XCTUnwrap(response)
         XCTAssertEqual(layout.source, .server)
-        XCTAssertEqual(layout.sections.map(\.id), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.id), [
             "emby:mystery", "emby:resume", "emby:live", "emby:libraries", "emby:latestmedia_movies", "emby:another"
         ])
-        XCTAssertEqual(layout.sections.map(\.kind), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.kind), [
             .recommendations, .continueWatching, .liveTV, .libraries, .recentlyAdded, .recommendations
         ])
         XCTAssertEqual(layout.sections.first?.title, "My selection")
@@ -610,11 +639,11 @@ final class JellyfinHomeLayoutTests: XCTestCase {
         let provider = JellyfinProvider(session: session(.emby), http: stub)
         let response = try await provider.serverHomeLayout()
         let layout = try XCTUnwrap(response)
-        XCTAssertEqual(layout.sections.map(\.id), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.id), [
             "emby:userviews", "emby:resume", "emby:onnow",
             "emby:latestmedia_movies", "emby:latestmedia_shows"
         ])
-        XCTAssertEqual(layout.sections.map(\.kind), [
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.kind), [
             .libraries, .continueWatching, .liveTV, .recentlyAdded, .recentlyAdded
         ])
         XCTAssertTrue(layout.omitsMusic, "An audio section is omitted even without a music library.")
@@ -684,7 +713,7 @@ final class JellyfinHomeLayoutTests: XCTestCase {
         let provider = JellyfinProvider(session: session(.emby), http: stub)
         let fetchedLayout = try await provider.serverHomeLayout()
         let layout = try XCTUnwrap(fetchedLayout)
-        XCTAssertEqual(layout.sections.map(\.id), ["emby:watching", "emby:listening", "emby:reading"])
+        XCTAssertEqual(layout.sections.filter { $0.id != "plozz:collections" }.map(\.id), ["emby:watching", "emby:listening", "emby:reading"])
         for limit in [20, Int.max] {
             let results = await provider.serverHomeItems(
                 sections: layout.sections, limit: limit, excludingLibraryIDs: []

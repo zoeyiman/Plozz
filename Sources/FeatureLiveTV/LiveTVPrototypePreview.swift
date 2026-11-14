@@ -4,6 +4,7 @@ import FeatureLiveTVCore
 import SwiftUI
 
 struct PrototypePreviewLayout {
+    let usesSplitChannels: Bool
     let bounds: CGRect
     let contentFrame: CGRect
     let heroHeight: CGFloat
@@ -64,6 +65,7 @@ struct PrototypePreviewLayout {
 
     var availableSidebarWidth: CGFloat {
         #if os(tvOS)
+        guard !usesSplitChannels else { return 0 }
         guard contentFrame.width >= 960,
               contentFrame.height - heroHeight - PrototypeLayout.sectionGap >= 420 else { return 0 }
         let preferred: CGFloat = contentFrame.width >= 1_400 ? 384 : 320
@@ -87,8 +89,12 @@ struct PrototypePreviewLayout {
 
     var sidebarWidth: CGFloat { hidesSidebar ? 0 : availableSidebarWidth }
 
+    var channelListWidth: CGFloat { min(contentFrame.width * 0.44, 780) }
+    static let channelToolbarHeight: CGFloat = 84
+
     var guideWidth: CGFloat {
-        contentFrame.width - (sidebarWidth > 0 ? sidebarWidth + PrototypeLayout.sectionGap : 0)
+        if usesSplitChannels { return channelListWidth }
+        return contentFrame.width - (sidebarWidth > 0 ? sidebarWidth + PrototypeLayout.sectionGap : 0)
     }
 
     var heroWidth: CGFloat {
@@ -129,11 +135,14 @@ struct PrototypePreviewLayout {
         topNavigationInsets: EdgeInsets = EdgeInsets(),
         largeText: Bool = false, isSearching: Bool = false,
         hidesSidebar: Bool = false, showsCategories: Bool = false,
-        showsVideoPreview: Bool = false, toolbarControlsBottom: CGFloat? = nil
+        showsVideoPreview: Bool = false, toolbarControlsBottom: CGFloat? = nil,
+        splitChannels: Bool = false
     ) {
         #if os(tvOS)
+        usesSplitChannels = splitChannels && !isSearching && !largeText
         self.hidesSidebar = hidesSidebar
         #else
+        usesSplitChannels = false
         self.hidesSidebar = isSearching
         #endif
         bounds = CGRect(
@@ -180,8 +189,8 @@ struct PrototypePreviewLayout {
             largeText ? 440 : (compact ? 184 : 236)
         )
         #if os(tvOS)
-        let videoLeading = bounds.minX
-        let videoWidth = bounds.width
+        let videoLeading = usesSplitChannels ? contentFrame.minX + channelListWidth + PrototypeLayout.sectionGap : bounds.minX
+        let videoWidth = usesSplitChannels ? max(1, contentFrame.maxX - videoLeading) : bounds.width
         heroHeight = isSearching
             ? min(browsingHeroHeight, largeText ? 230 : (compact ? 140 : 180))
             : browsingHeroHeight
@@ -196,13 +205,13 @@ struct PrototypePreviewLayout {
         heroHeight = self.isSearching || !showsVideoPreview
             ? 0 : max(0, previewTop + previewHeight - contentFrame.minY)
         #endif
-        metadataWidth = compact || largeText ? contentFrame.width : contentFrame.width * 0.56
+        metadataWidth = usesSplitChannels ? videoWidth : (compact || largeText ? contentFrame.width : contentFrame.width * 0.56)
         #if os(iOS)
         let videoHeight = previewHeight
         let videoTop = previewTop
         #else
         let videoHeight = videoWidth * 9 / 16
-        let videoTop = bounds.minY
+        let videoTop = usesSplitChannels ? contentFrame.minY + Self.channelToolbarHeight : bounds.minY
         #endif
         videoFrame = CGRect(
             x: videoLeading,
@@ -414,9 +423,27 @@ struct PrototypePreviewScrim: View {
     let layout: PrototypePreviewLayout
     let reduceTransparency: Bool
     @Environment(\.themePalette) private var palette
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.gradientBackgroundsEnabled) private var gradientEnabled
 
     var body: some View {
+        if layout.usesSplitChannels {
+            let picture = layout.videoFrame.offsetBy(dx: -layout.bounds.minX, dy: -layout.bounds.minY)
+            let cutout = layoutDirection == .rightToLeft
+                ? CGRect(x: layout.bounds.width - picture.maxX, y: picture.minY, width: picture.width, height: picture.height)
+                : picture
+            palette.backgroundBase
+                .mask {
+                    Path { path in
+                        path.addRect(CGRect(origin: .zero, size: layout.bounds.size))
+                        path.addRoundedRect(in: cutout,
+                                            cornerSize: CGSize(width: 14, height: 14))
+                    }
+                    .fill(style: FillStyle(eoFill: true))
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
         ZStack(alignment: .top) {
             HeroLegibilityScrim(
                 tone: palette.backgroundBase, edgePeak: 0.96, wash: 0.08,
@@ -454,6 +481,8 @@ struct PrototypePreviewScrim: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+    }
+
 }
 
 /// The guide's info bar: the programme's art (the channel's logo when the guide

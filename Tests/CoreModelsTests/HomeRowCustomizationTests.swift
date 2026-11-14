@@ -2,6 +2,21 @@ import XCTest
 @testable import CoreModels
 
 final class HomeRowCustomizationTests: XCTestCase {
+    func testServerCollectionsUseCollectionCoverPresentationAndCanBeCustomized() throws {
+        let definition = HomeServerRowDefinition(accountID: "jellyfin", serverName: "My server", providerKind: .jellyfin,
+            section: .init(id: "plozz:collections", kind: .collections, title: "Streaming Services", libraryID: "services"))
+        let choice = HomeRowChoice(serverRow: definition)
+        XCTAssertTrue(choice.hasCollectionCovers)
+        XCTAssertEqual(choice.title, "Streaming Services")
+        let catalog = HomeSectionCatalog(libraries: [], serverRows: [definition])
+        let initial = HomeLibraryVisibility(rowCustomization: .init(defaults: .provider))
+        XCTAssertTrue(catalog.sections(in: initial).enabled.contains(definition.id))
+        let hidden = try catalog.settingVisible(false, id: definition.id, in: initial)
+        XCTAssertFalse(catalog.sections(in: hidden).enabled.contains(definition.id))
+        let restored = try catalog.settingVisible(true, id: definition.id, in: hidden)
+        XCTAssertTrue(catalog.sections(in: restored).enabled.contains(definition.id))
+    }
+
     func testNativeShelfLocatorRoundTripsAndOldRowsRemainDecodable() throws {
         let old = Data(#"{"id":"plex:1:movie.recentlyadded.1","kind":"recentlyAdded","libraryID":"1","includesNextUp":false}"#.utf8)
         var section = try JSONDecoder().decode(ServerHomeSection.self, from: old)

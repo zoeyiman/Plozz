@@ -63,7 +63,7 @@ extension JellyfinProvider {
             }
             if let native {
                 let views = try await client.userViews(userID: session.userID)
-                return nativeHomeLayout(native, views: views)
+                return addingCollectionCovers(to: nativeHomeLayout(native, views: views), views: views)
             }
         }
         let preferences: HomeDisplayPreferencesDto
@@ -73,7 +73,24 @@ extension JellyfinProvider {
             return nil
         }
         let views = try await client.userViews(userID: session.userID)
-        return webHomeLayout(preferences, views: views)
+        return addingCollectionCovers(to: webHomeLayout(preferences, views: views), views: views)
+    }
+
+    /// Keep the server's shelves and append its boxset directory as one browsable cover row.
+    private func addingCollectionCovers(to layout: ServerHomeLayout, views: [BaseItemDto]) -> ServerHomeLayout {
+        #if os(tvOS)
+        guard kind == .jellyfin else { return layout }
+        guard views.contains(where: Self.isHomeVideoView) || views.contains(where: { $0.CollectionType == "boxsets" }) else { return layout }
+        var result = layout
+        let collectionView = views.first { $0.CollectionType == "boxsets" }
+        let directory = collectionView?.Id ?? collectionDirectoryID
+        result.sections.append(ServerHomeSection(
+            id: "plozz:collections", kind: .collections, title: collectionView?.Name, libraryID: directory
+        ))
+        return result
+        #else
+        return layout
+        #endif
     }
 
     public func serverHomeItems(
@@ -121,6 +138,11 @@ extension JellyfinProvider {
     ) async throws -> [MediaItem] {
         guard limit > 0, section.kind != .libraries, section.kind != .liveTV,
               section.libraryID.map({ !excludingLibraryIDs.contains($0) }) ?? true else { return [] }
+        if section.kind == .collections {
+            let page = try await collections(in: section.libraryID ?? collectionDirectoryID,
+                                             page: PageRequest(limit: limit))
+            return page.items
+        }
         let boundedLimit = section.kind == .continueWatching || !isPreview ? limit : min(limit, 100)
         if section.id.hasPrefix("emby:") {
             guard kind == .emby else { throw AppError.invalidResponse }

@@ -91,7 +91,8 @@ public struct HomeRowChoice: Identifiable, Equatable, Sendable {
         self.init(
             id: serverRow.id, title: serverRow.section.title ?? serverRow.section.kind.rawValue,
             localizedTitle: serverRow.section.title == nil ? serverRow.section.kind.title : nil,
-            isProviderDefault: true, isLegacyDefault: false, serverRow: serverRow
+            isProviderDefault: true, isLegacyDefault: false, serverRow: serverRow,
+            hasCollectionCovers: serverRow.section.kind == .collections
         )
     }
 

@@ -3,6 +3,25 @@ import CoreModels
 @testable import FeatureHomeCore
 
 final class HomePresentationRowTests: XCTestCase {
+    func testJellyfinCollectionCoversAppearAsOneBrowsableHomeShelf() throws {
+        let definition = HomeServerRowDefinition(accountID: "a", serverName: "Jellyfin", providerKind: .jellyfin,
+            section: .init(id: "plozz:collections", kind: .collections, title: "Streaming Services", libraryID: "services"))
+        let covers = [MediaItem(id: "netflix", title: "Netflix", kind: .collection),
+                      MediaItem(id: "disney", title: "Disney+", kind: .collection)]
+        let content = HomeViewModel.Content(serverRows: [.init(definition: definition, items: covers, hasMore: true)])
+        let visibility = HomeLibraryVisibility(rowCustomization: .init(defaults: .custom,
+            shown: [definition.id], serverRows: [definition]))
+        let rows = HomePresentationRow.resolve(rows: [], content: content, visibility: visibility)
+        XCTAssertEqual(rows.count, 1)
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertEqual(row.choice.title, "Streaming Services")
+        XCTAssertTrue(row.choice.hasCollectionCovers)
+        XCTAssertTrue(row.canBrowse)
+        guard case let .library(section) = row.source else { return XCTFail("Expected a cover shelf") }
+        XCTAssertEqual(section.section.items.map(\.id), ["netflix", "disney"])
+        XCTAssertTrue(section.section.items.allSatisfy { $0.kind == .collection })
+    }
+
     func testWatchedFilterUsesOverflowWithoutChangingHeroOrOtherRows() throws {
         let items = (0..<80).map {
             MediaItem(id: "\($0)", title: "Movie \($0)", kind: .movie, isPlayed: $0 < 30)

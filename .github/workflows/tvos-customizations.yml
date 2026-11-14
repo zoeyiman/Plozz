@@ -1,0 +1,74 @@
+name: tvOS Home and Live TV checks
+
+on:
+  push:
+    branches: [codex/tvos-home-collections-live-layout]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tvos-customizations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-tests:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Select supported Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_27*.app | grep -vi beta | sort -V | tail -n 1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - name: Prepare isolated test lane
+        uses: ./.github/actions/ci-prepare
+        with:
+          lane: package-tests
+      - name: Architecture and localization checks
+        run: |
+          python3 tools/arch-guard.py
+          tools/l10n-guard.sh
+          python3 tools/test-hygiene.py
+      - name: Run affected tvOS suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .build/ci-logs/package-tests
+          python3 tools/run-bounded.py 3000 "Home and Live TV focused suites" -- \
+            tools/run-tests.sh CoreModelsTests ProviderJellyfinTests FeatureHomeTests \
+            FeatureLiveTVCoreTests FeatureLiveTVTests \
+            2>&1 | tee .build/ci-logs/package-tests/focused-tests.log
+      - name: Report Swift diagnostics
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          log = Path('.build/ci-logs/package-tests/focused-tests.log')
+          if log.exists():
+              for line in log.read_text(errors='replace').splitlines():
+                  match = re.search(r'([^\s]+\.swift):(\d+)(?::(\d+))?: error: (.*)', line)
+                  if match:
+                      path, row, column, message = match.groups()
+                      for root in ['Sources/', 'Tests/']:
+                          if '/' + root in path:
+                              path = root + path.split('/' + root, 1)[1]
+                              break
+                      message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                      print(f'::error file={path},line={row},col={column or "1"}::{message}')
+          PY
+      - name: Retain native test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvos-home-live-tv-checks
+          path: |
+            .build/ci-logs/package-tests
+            .build/test-results
+          if-no-files-found: warn
+          retention-days: 7

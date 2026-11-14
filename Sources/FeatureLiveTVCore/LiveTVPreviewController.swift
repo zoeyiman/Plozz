@@ -28,6 +28,7 @@ public final class LiveTVPreviewController {
     private var focusedChannelID: String?
     private var browsingActive = true
     private var hasExplicitPlayback = false
+    private var followsFocusWhileInline = false
     private var revision: UInt64 = 0
 
     public var isHoldingWatchedChannel: Bool {
@@ -78,6 +79,13 @@ public final class LiveTVPreviewController {
     public func setFollowsFocus(_ enabled: Bool) {
         guard followsFocus != enabled else { return }
         followsFocus = enabled
+        schedulePreview()
+    }
+
+    /// Channel-browser mode keeps the preview attached to the focused channel after returning from full screen.
+    public func setFollowsFocusWhileInline(_ enabled: Bool) {
+        guard followsFocusWhileInline != enabled else { return }
+        followsFocusWhileInline = enabled
         schedulePreview()
     }
 
@@ -184,7 +192,7 @@ public final class LiveTVPreviewController {
 
     private var canPreviewFocusedChannel: Bool {
         browsingActive && followsFocus && !isExpanded && !isRestoringGuideFocus
-            && !isHoldingWatchedChannel
+            && (!isHoldingWatchedChannel || followsFocusWhileInline)
     }
 
     private func cancelPendingPreview() {
