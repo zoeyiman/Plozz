@@ -2400,3 +2400,13 @@ than scanning the complete guide for every focus move. The player remains in its
 existing root pane while the browser layout changes; runtime continuity and
 presented focus/geometry still require the hosted/physical-device checks described
 in the testing policy.
+
+The Channels list reuses `PrototypeNativeGuideList` for bounded, recycled row
+hosting, including distant restoration into large IPTV catalogs. Programme
+lookups live in each mounted row body. Back from a channel returns focus to the
+browse toolbar and releases any pending guide-focus restoration. Restoration
+retries when the browser becomes presented after a sheet or tab handoff.
+`LiveTVChannelBrowserTests` mounts a 10,000-channel browser without network or
+programme data and checks native row reuse at the beginning and end of the list.
+This does not establish that a real provider guide finishes importing, or prove
+physical-device responsiveness; those remain device checks.

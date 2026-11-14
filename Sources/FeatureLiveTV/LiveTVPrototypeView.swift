@@ -1454,7 +1454,15 @@ public struct LiveTVPrototypeView<PlayerContent: View>: View {
                     },
                     watch: { row in tune(row.channelID, origin: row) },
                     focusChanged: { guideHasFocus = $0; if $0 { controlsActive = false } },
-                    restored: { preview.completeGuideFocusRestore($0, focusedChannelID: selectedChannelID) }
+                    restored: { preview.completeGuideFocusRestore($0, focusedChannelID: selectedChannelID) },
+                    openToolbar: {
+                        playback.cancelWatch()
+                        preview.completeGuideFocusRestore(preview.focusRestoreRequest,
+                                                          focusedChannelID: selectedChannelID)
+                        controlsActive = true
+                        sidebarRestoresCategoryFocus = false
+                        toolbarFocusRequest &+= 1
+                    }
                 )
                 .frame(width: layout.channelListWidth)
                 VStack(spacing: 20) {

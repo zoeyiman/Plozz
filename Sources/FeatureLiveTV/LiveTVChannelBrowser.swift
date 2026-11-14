@@ -17,13 +17,24 @@ struct LiveTVChannelBrowser: View {
     let watch: (LiveTVGuideRowID) -> Void
     let focusChanged: (Bool) -> Void
     let restored: (Int) -> Void
+    let openToolbar: () -> Void
     @FocusState private var focused: LiveTVGuideRowID?
     @State private var pendingFocus: LiveTVGuideRowID?
     @State private var nativeFocusedRow: LiveTVGuideRowID?
-    @Environment(\.themePalette) private var palette
-    @Environment(\.locale) private var locale
+    @State private var nativeScroll = PrototypeGuideScrollController()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(LiveTVGuidePreparationModel.self) private var guidePreparation: LiveTVGuidePreparationModel?
+    private struct ChannelRowRevision: Equatable {
+        let entry: LiveTVGuideChannel?
+        let restoreRequest: Int
+    }
+
+    private struct FocusRequest: Equatable {
+        let revision: Int
+        let isPresented: Bool
+        let firstRow: LiveTVGuideRowID?
+    }
+
     private struct GuideRequest: Equatable {
         let server: PrototypeServerGuideRequest?
         let cached: PrototypeGuideWindowRequest?
@@ -52,34 +63,57 @@ struct LiveTVChannelBrowser: View {
     }
 
     var body: some View {
-        ScrollViewReader { scroll in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(model.guideChannels) { row in
-                        if row.startsSection {
-                            Text(row.section.title)
-                                .font(.headline).foregroundStyle(palette.secondaryText)
-                                .padding(.top, 12)
-                        }
-                        channelButton(row)
+        PrototypeNativeGuideList(
+            rows: model.guideRowIDs,
+            rowHeight: PrototypeLayout.rowHeight + PrototypeLayout.smallGap * 2 + PrototypeLayout.rowGap,
+            scrollController: nativeScroll,
+            scrolled: { _, _ in },
+            revision: { row in
+                ChannelRowRevision(entry: model.guideEntry(for: row), restoreRequest: restoreFocusRequest)
+            }
+        ) { rowID in
+            if let row = model.guideEntry(for: rowID) {
+                VStack(alignment: .leading, spacing: PrototypeLayout.sectionLabelGap) {
+                    if row.startsSection, row.section != model.guideChannels.first?.section {
+                        PrototypeGuideSectionLabel(section: row.section)
+                            .padding(.top, PrototypeLayout.smallGap)
                     }
+                    LiveTVChannelBrowserRow(model: model, row: row, watch: { watch(row.id) }) { ownsFocus in
+                        guard ownsFocus else {
+                            if nativeFocusedRow == row.id { nativeFocusedRow = nil; focusChanged(false) }
+                            return
+                        }
+                        nativeFocusedRow = row.id
+                        focusChanged(true)
+                        selectedRow = row.id
+                        select(row.id)
+                        pendingFocus = nil
+                        restored(restoreFocusRequest)
+                    }
+                    .focused($focused, equals: row.id)
+                    .frame(height: PrototypeLayout.rowHeight + PrototypeLayout.smallGap * 2)
                 }
-                .padding(12)
+                .padding(.horizontal, PrototypeLayout.smallGap)
+                .onAppear { if pendingFocus == row.id { focused = row.id } }
             }
-            .scrollClipDisabled()
-            .task(id: restoreFocusRequest) {
-                guard restoreFocusRequest > 0 else { return }
-                let rows = model.guideChannels
-                let target = selectedRow.flatMap { target in rows.first { $0.id == target }?.id } ?? rows.first?.id
-                if let target {
-                    pendingFocus = target
-                    scroll.scrollTo(target, anchor: .center)
-                    focused = target
-                }
-            }
-            .onDisappear { focusChanged(false) }
         }
+        .task(id: FocusRequest(revision: restoreFocusRequest, isPresented: isPresented,
+                              firstRow: model.guideChannels.first?.id)) {
+            guard isPresented, restoreFocusRequest > 0 else { return }
+            // A sheet or tab can have disabled the previous focus attempt; retry when presented.
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            let rows = model.guideChannels
+            let target = selectedRow.flatMap { target in rows.first { $0.id == target }?.id } ?? rows.first?.id
+            if let target {
+                pendingFocus = target
+                nativeScroll.scrollTo(target, anchor: .center)
+                focused = target
+            }
+        }
+        .onDisappear { nativeFocusedRow = nil; focusChanged(false) }
         .focusSection()
+        .onExitCommand(perform: openToolbar)
         .task(id: guideRequest) {
             let request = guideRequest
             guard request.server != nil || request.cached != nil || request.library != nil else { return }
@@ -99,11 +133,22 @@ struct LiveTVChannelBrowser: View {
         }
     }
 
-    private func channelButton(_ row: LiveTVGuideChannel) -> some View {
+}
+
+/// Keep programme lookups and playback observation inside the lazily mounted row body.
+private struct LiveTVChannelBrowserRow: View {
+    let model: LiveTVPrototypeModel
+    let row: LiveTVGuideChannel
+    let watch: () -> Void
+    let focusChanged: (Bool) -> Void
+    @Environment(\.themePalette) private var palette
+    @Environment(\.locale) private var locale
+
+    var body: some View {
         let channel = row.channel
         let current = model.currentProgram(for: channel.id)
         let next = model.programs(for: channel.id, from: model.now, hours: 6).first { $0.start > model.now }
-        return Button { watch(row.id) } label: {
+        Button(action: watch) {
             HStack(spacing: 16) {
                 Text(channel.number.formatted(.number.grouping(.never))).font(.caption.monospacedDigit())
                     .foregroundStyle(palette.secondaryText).frame(width: 56)
@@ -124,26 +169,10 @@ struct LiveTVChannelBrowser: View {
             }
             .padding(16)
         }
-         .buttonStyle(PrototypeButtonStyle(selected: model.playingChannelID == channel.id, padded: false,
-            focusChanged: { ownsFocus in
-                guard ownsFocus else {
-                    if nativeFocusedRow == row.id { nativeFocusedRow = nil; focusChanged(false) }
-                    return
-                }
-                nativeFocusedRow = row.id
-                focusChanged(true)
-                selectedRow = row.id
-                select(row.id)
-                pendingFocus = nil
-                restored(restoreFocusRequest)
-            }))
-        .focused($focused, equals: row.id)
-        .id(row.id)
-        .onAppear { if pendingFocus == row.id { focused = row.id } }
+        .buttonStyle(PrototypeButtonStyle(selected: model.playingChannelID == channel.id,
+                                         padded: false, focusChanged: focusChanged))
         .accessibilityIdentifier("live-tv-channel-\(channel.id)")
     }
-
-
 }
 
 struct LiveTVChannelProgrammeDetails: View {
